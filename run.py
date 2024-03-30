@@ -34,7 +34,8 @@ def get_image_titles(page_title: str) -> List[str]:
         "action": "query",
         "prop": "images",
         "format": "json",
-        "titles": page_title
+        "titles": page_title,
+        "imlimit": 200
     }
     response = requests.get(url, params=params).json()
     page_id = next(iter(response["query"]["pages"]))
@@ -64,7 +65,6 @@ def get_image_info(image_title: str) -> Optional[str]:
 def download_svg(url: str, filename: str):
     """Download an SVG file."""
     try:
-        # follow wikimedia user
         response = requests.get(url, headers={"User-Agent": WIKI_USERAGENT})
                                 
         response.raise_for_status()
@@ -93,8 +93,11 @@ def get_comarca_capital_from_html(page_url):
 
 def get_comarca_data(comarca_name: str) -> Optional[ComarcaData]:
     images = get_image_titles(comarca_name)
-    map_urls = [get_image_info(image) for image in images if image.endswith("a Catalunya.svg")]
-    escut_urls = [get_image_info(image) for image in images if "Coat" in image]
+    map_urls = [get_image_info(image) for image in images 
+                if image.endswith(".svg") and "a Catalunya" in image]
+    escut_urls = [get_image_info(image) for image in images 
+                  if image.endswith(".svg") and
+                  ("Coat" in image or "Escut" in image)]
     comarca_path = comarca_name.replace(" ", "_")
     data = ComarcaData(
         comarca = comarca_name,
@@ -170,9 +173,9 @@ def get_notes(data: List[ComarcaData], model) -> List[genanki.Note]:
                 '', # capital info
                 comarca.comarca,
                 '', # comarca info
-                f'<img src="{Path(comarca.escut_url).name}">',
+                f'<img src="{Path(comarca.escut_url).name}">' if comarca.escut_url else '',
                 '', # escut similarity
-                f'<img src="{Path(comarca.map_url).name}">'
+                f'<img src="{Path(comarca.map_url).name}">' if comarca.map_url else ''
             ]
         ) for comarca in data]
 
@@ -190,8 +193,8 @@ def main():
     os.makedirs("imgs", exist_ok=True)
     wiki = wikipediaapi.Wikipedia(WIKI_USERAGENT,'ca')
     comarques = get_comarques_categories(wiki)
-    progress = tqdm(comarques, desc="Processing comarques")
     data = []
+    progress = tqdm(comarques, desc="Processing comarques")
     for comarca in progress:
         title = comarca.title.split(":")[-1]
         progress.set_postfix_str(title)
